@@ -1297,11 +1297,7 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
     const midY = (startY + finalEndY) / 2;
 
     // Use different curve for tool connections (vertical approach)
-    const sourceNode2 = nodes.find(n => n.id === sourceId);
-    const targetNode2 = targetId ? nodes.find(n => n.id === targetId) : null;
-    const isToolConnection = sourceNode2?.type === 'tool' && targetNode2?.type === 'agent';
-    const isSubAgentConnection = sourceNode2?.type === 'agent' && sourceNode2.parentAgentId === targetId;
-    const isVerticalStepFlow = (sourceNode2?.type === 'agent' || sourceNode2?.type === 'step') && targetNode2?.type === 'step';
+    const isVerticalStepFlow = (sourceNode.type === 'agent' || sourceNode.type === 'step') && targetNode?.type === 'step';
 
     if (isToolConnection || isSubAgentConnection) {
       // Smooth curve for tool and sub-agent connections
