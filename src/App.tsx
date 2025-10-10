@@ -7,9 +7,11 @@ import { Button } from './components/ui/button';
 import * as LucideIcons from 'lucide-react';
 
 export default function App() {
-  const [sidebarWidth, setSidebarWidth] = useState(230);
+  const [sidebarWidth, setSidebarWidth] = useState(288);
   const [isResizing, setIsResizing] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const resizeRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<any>(null);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -47,40 +49,41 @@ export default function App() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="h-screen flex flex-col bg-background">
-        {/* Header */}
-        <header className="border-b bg-white">
-          <div className="flex items-center justify-between px-6 py-3">
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-2 rounded-lg">
-                <LucideIcons.Workflow className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl">Workflow Builder</h1>
-                <p className="text-sm text-muted-foreground">Create AI-powered workflows</p>
-              </div>
-            </div>
-
+      <div className="h-screen flex bg-background relative">
+        {/* Collapsed sidebar header floating over canvas */}
+        {isSidebarCollapsed && (
+          <div className="absolute left-0 top-0 z-50">
+            <WorkflowSidebar
+              isCollapsed={isSidebarCollapsed}
+              onCollapseChange={setIsSidebarCollapsed}
+              onCreateAgent={() => canvasRef.current?.createEmptyAgent()}
+            />
           </div>
-        </header>
+        )}
 
         {/* Main content */}
         <div className="flex-1 flex overflow-hidden">
-          <div style={{ width: `${sidebarWidth}px` }} className="relative flex-shrink-0">
-            <WorkflowSidebar />
-            {/* Resize handle */}
-            <div
-              ref={resizeRef}
-              onMouseDown={handleMouseDown}
-              className="absolute top-0 right-0 w-1 h-full cursor-ew-resize hover:bg-blue-500 transition-colors z-50"
-              style={{
-                backgroundColor: isResizing ? '#3b82f6' : 'transparent',
-              }}
-            >
-              <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-12 bg-gray-300 rounded-l" />
+          {!isSidebarCollapsed && (
+            <div style={{ width: `${sidebarWidth}px` }} className="relative flex-shrink-0">
+              <WorkflowSidebar
+                isCollapsed={isSidebarCollapsed}
+                onCollapseChange={setIsSidebarCollapsed}
+                onCreateAgent={() => canvasRef.current?.createEmptyAgent()}
+              />
+              {/* Resize handle */}
+              <div
+                ref={resizeRef}
+                onMouseDown={handleMouseDown}
+                className="absolute top-0 right-0 w-1 h-full cursor-ew-resize hover:bg-blue-500 transition-colors z-50"
+                style={{
+                  backgroundColor: isResizing ? '#3b82f6' : 'transparent',
+                }}
+              >
+                <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-12 bg-gray-300 rounded-l" />
+              </div>
             </div>
-          </div>
-          <WorkflowCanvas />
+          )}
+          <WorkflowCanvas ref={canvasRef} />
         </div>
       </div>
     </DndProvider>

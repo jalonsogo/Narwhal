@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useDrop } from 'react-dnd';
 import { WorkflowNode } from './WorkflowNode';
 import { AgentDropZone } from './AgentDropZone';
@@ -10,12 +10,13 @@ import { ToolConfigPanel } from './ToolConfigPanel';
 import { Button } from './ui/button';
 import * as LucideIcons from 'lucide-react';
 import yaml from 'js-yaml';
+import { getToolFunctions } from '../data/toolDefinitions';
 
 const INPUT_NODE_ID = 'default-input';
 const OUTPUT_NODE_ID = 'default-output';
 const KNOWLEDGE_NODE_ID = 'default-knowledge';
 
-export function WorkflowCanvas() {
+export const WorkflowCanvas = forwardRef((props, ref) => {
   const [nodes, setNodes] = useState<WorkflowNodeType[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [showDropZone, setShowDropZone] = useState(true);
@@ -33,6 +34,72 @@ export function WorkflowCanvas() {
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const [toolConfigDialogOpen, setToolConfigDialogOpen] = useState(false);
   const [selectedToolForConfig, setSelectedToolForConfig] = useState<WorkflowNodeType | null>(null);
+
+  // Panning state
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const isPanningRef = useRef(false);
+
+  // Panning handlers
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    // Only pan on middle mouse button or left click on empty space
+    if (e.button === 1 || (e.button === 0 && e.target === e.currentTarget)) {
+      e.preventDefault();
+      setIsPanning(true);
+      isPanningRef.current = true;
+      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+    }
+  };
+
+  const handleCanvasMouseMove = (e: React.MouseEvent) => {
+    if (isPanning && isPanningRef.current) {
+      setPanOffset({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y,
+      });
+    }
+  };
+
+  const handleCanvasMouseUp = () => {
+    setIsPanning(false);
+    isPanningRef.current = false;
+  };
+
+  // Add global mouse up listener for panning
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isPanning) {
+        setIsPanning(false);
+        isPanningRef.current = false;
+      }
+    };
+
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, [isPanning]);
+
+  // Expose createEmptyAgent method via ref
+  useImperativeHandle(ref, () => ({
+    createEmptyAgent: () => {
+      const newAgent: WorkflowNodeType = {
+        id: `agent-${Date.now()}`,
+        type: 'agent',
+        name: 'New Agent',
+        icon: 'Bot',
+        position: { x: 400, y: 250 },
+        description: '',
+        toolsets: [],
+        prompt: '',
+        showTools: true,
+        showConnectors: true,
+      };
+      setNodes(prev => [...prev, newAgent]);
+      // Open config panel immediately
+      setSelectedNodeForConfig(newAgent);
+      setConfigDialogOpen(true);
+    }
+  }));
 
   // Initialize with default Input, Output, and Knowledge nodes
   useEffect(() => {
@@ -196,6 +263,9 @@ export function WorkflowCanvas() {
                     ? (toolset.command || 'MCP Connector')
                     : getToolDisplayName(toolset);
 
+                  // Get functions for this tool from toolDefinitions
+                  const toolFunctions = getToolFunctions(displayName);
+
                   const toolNode: WorkflowNodeType = {
                     id: `node-${Date.now()}-${Math.random()}-${index}`,
                     type: 'tool',
@@ -211,6 +281,9 @@ export function WorkflowCanvas() {
                       type: 'mcp',
                       command: toolset.command,
                       args: toolset.args || [],
+                    } : undefined,
+                    data: toolFunctions.length > 0 ? {
+                      functions: toolFunctions.map(f => f.name),
                     } : undefined,
                   };
 
@@ -370,6 +443,9 @@ export function WorkflowCanvas() {
     const row = Math.floor(toolCount / columns);
     const col = toolCount % columns;
 
+    // Get functions for this tool from toolDefinitions
+    const toolFunctions = getToolFunctions(tool.name);
+
     // Create the tool node below the agent in grid layout
     const toolNode: WorkflowNodeType = {
       id: `node-${Date.now()}-${Math.random()}`,
@@ -380,8 +456,32 @@ export function WorkflowCanvas() {
         x: agentNode.position.x + (col * toolSpacingX) - 110,
         y: agentNode.position.y + startOffsetY + (row * toolSpacingY),
       },
+      parentAgentId: agentId,
+      toolsetType: tool.mcpConfig ? 'mcp' : 'builtin',
       mcpConfig: tool.mcpConfig, // Store MCP config if present
+      data: toolFunctions.length > 0 ? {
+        functions: toolFunctions.map(f => f.name),
+      } : undefined,
     };
+
+    // Create toolset entry for the agent's toolsets array
+    const toolsetEntry: any = tool.mcpConfig ? {
+      type: 'mcp',
+      name: tool.name, // Store the friendly name (e.g., "Salesforce MCP", "GitHub MCP")
+      command: tool.mcpConfig.command,
+      args: tool.mcpConfig.args,
+    } : {
+      type: tool.name.toLowerCase().replace(/\s+/g, '_'),
+    };
+
+    // Update the agent node to add this tool to its toolsets
+    setNodes(prev => prev.map(node => {
+      if (node.id === agentId) {
+        const updatedToolsets = [...(node.toolsets || []), toolsetEntry];
+        return { ...node, toolsets: updatedToolsets };
+      }
+      return node;
+    }));
 
     // Add the tool node
     setNodes(prev => [...prev, toolNode]);
@@ -812,6 +912,9 @@ export function WorkflowCanvas() {
               ? (toolset.command || 'MCP Connector')
               : getToolDisplayName(toolset);
 
+            // Get functions for this tool from toolDefinitions
+            const toolFunctions = getToolFunctions(displayName);
+
             const toolNode: WorkflowNodeType = {
               id: `node-${Date.now()}-${Math.random()}-${index}`,
               type: 'tool',
@@ -827,6 +930,9 @@ export function WorkflowCanvas() {
                 type: 'mcp',
                 command: toolset.command,
                 args: toolset.args || [],
+              } : undefined,
+              data: toolFunctions.length > 0 ? {
+                functions: toolFunctions.map(f => f.name),
               } : undefined,
             };
 
@@ -1080,7 +1186,12 @@ export function WorkflowCanvas() {
       if (node.id !== nodeId) return node;
 
       if (node.type === 'agent') {
-        return { ...node, agentConfig: config };
+        // Update both agentConfig and name if provided
+        const updates: any = { agentConfig: config };
+        if (config.name) {
+          updates.name = config.name;
+        }
+        return { ...node, ...updates };
       } else if (node.type === 'tool') {
         return { ...node, data: config };
       }
@@ -1346,8 +1457,8 @@ export function WorkflowCanvas() {
         </div>
       </div>
 
-      {/* Bottom Left - Zoom Controls */}
-      <div className="absolute bottom-4 left-4 z-10">
+      {/* Zoom Controls - Top Right */}
+      <div className="absolute top-16 right-4 z-10">
         <div className="bg-white rounded-lg shadow-lg p-2 flex flex-col gap-1">
           <Button variant="ghost" size="icon" onClick={handleZoomIn}>
             <LucideIcons.ZoomIn className="w-4 h-4" />
@@ -1382,10 +1493,20 @@ export function WorkflowCanvas() {
 
       <div
         ref={canvasRef}
-        className={`w-full h-full relative ${isOver ? 'bg-blue-50' : ''}`}
-        style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
-        onMouseMove={handleConnectionDrag}
-        onMouseUp={handleConnectionCancel}
+        className={`w-full h-full relative ${isOver ? 'bg-blue-50' : ''} ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+        style={{
+          transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+          transformOrigin: 'top left'
+        }}
+        onMouseDown={handleCanvasMouseDown}
+        onMouseMove={(e) => {
+          handleCanvasMouseMove(e);
+          handleConnectionDrag(e);
+        }}
+        onMouseUp={(e) => {
+          handleCanvasMouseUp();
+          handleConnectionCancel(e);
+        }}
       >
         <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }}>
           <defs>
@@ -1570,6 +1691,7 @@ export function WorkflowCanvas() {
         </div>
       </div>
 
+      {/* Stats Panel */}
       <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg px-4 py-2 flex gap-6 text-sm">
         <div>
           <span className="text-muted-foreground">Nodes: </span>
@@ -1578,10 +1700,6 @@ export function WorkflowCanvas() {
         <div>
           <span className="text-muted-foreground">Connections: </span>
           <span>{connections.length}</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Zoom: </span>
-          <span>{Math.round(zoom * 100)}%</span>
         </div>
       </div>
     </div>
@@ -1600,4 +1718,4 @@ export function WorkflowCanvas() {
     )}
     </>
   );
-}
+});

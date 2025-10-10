@@ -48,6 +48,7 @@ export function ConfigPanel({
   const [enabledFunctions, setEnabledFunctions] = useState<Record<string, boolean>>({});
 
   // Agent configuration state
+  const [agentName, setAgentName] = useState('');
   const [model, setModel] = useState('openai/gpt-4o-mini');
   const [description, setDescription] = useState('');
   const [instruction, setInstruction] = useState('');
@@ -76,6 +77,7 @@ export function ConfigPanel({
       }
 
       if (node.type === 'agent') {
+        setAgentName(node.name || 'New Agent');
         if (node.agentConfig) {
           setModel(node.agentConfig.model);
           setDescription(node.agentConfig.description);
@@ -198,6 +200,7 @@ export function ConfigPanel({
       onSave(node.id, config);
     } else if (node.type === 'agent') {
       const config: AgentConfiguration = {
+        name: agentName,
         model,
         description,
         instruction,
@@ -446,6 +449,19 @@ export function ConfigPanel({
                   </div>
                 ) : (
                   <>
+                    <div className="space-y-2">
+                      <Label htmlFor="agentName">Agent Name</Label>
+                      <Input
+                        id="agentName"
+                        value={agentName}
+                        onChange={(e) => setAgentName(e.target.value)}
+                        placeholder="My Agent"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        The display name for this agent
+                      </p>
+                    </div>
+
                     <div className="space-y-2">
                       <Label htmlFor="model">Model</Label>
                       <Input

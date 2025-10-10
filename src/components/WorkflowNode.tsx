@@ -51,7 +51,7 @@ export function WorkflowNode({
   const hasDragged = useRef(false);
 
   // Drop zone for tools on agent nodes
-  const [{ isOver: isToolOver }, dropRef] = useDrop(() => ({
+  const [{ isOver: isToolOver, draggedItem }, dropRef] = useDrop(() => ({
     accept: 'node',
     canDrop: (item: NodeTemplate) => {
       // Only allow dropping tools on agent nodes
@@ -64,8 +64,12 @@ export function WorkflowNode({
     },
     collect: (monitor) => ({
       isOver: monitor.isOver() && monitor.canDrop(),
+      draggedItem: monitor.getItem() as NodeTemplate | null,
     }),
   }), [node.type, node.id, onToolDrop]);
+
+  // Check if the dragged item is an MCP connector
+  const isDraggingConnector = isToolOver && draggedItem?.mcpConfig;
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -174,6 +178,7 @@ export function WorkflowNode({
       onMouseDown={handleMouseDown}
     >
       <div className={`w-[230px] bg-white rounded-lg shadow-md border ${
+        isDraggingConnector ? 'border-purple-500 border-2 shadow-purple-200' :
         isToolOver ? 'border-green-500 border-2 shadow-green-200' : 'border-gray-200'
       } ${isDraggingNode ? 'shadow-xl' : ''} transition-all`}>
         {/* Header */}
@@ -394,17 +399,17 @@ export function WorkflowNode({
                     <div className="flex flex-wrap gap-1">
                       {mcpConnectors.slice(0, 2).map((tool: any, idx: number) => (
                         <span key={idx} className="text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded">
-                          {tool.command || 'MCP'}
+                          {tool.name || tool.command || 'MCP'}
                         </span>
                       ))}
                       {mcpConnectors.length > 2 && (
                         <span
                           className="text-[10px] text-gray-500 cursor-help relative group"
-                          title={mcpConnectors.slice(2).map((t: any) => t.command || 'MCP').join(', ')}
+                          title={mcpConnectors.slice(2).map((t: any) => t.name || t.command || 'MCP').join(', ')}
                         >
                           +{mcpConnectors.length - 2}
                           <span className="invisible group-hover:visible absolute bottom-full left-0 mb-1 w-max max-w-xs bg-gray-900 text-white text-[10px] px-2 py-1 rounded shadow-lg z-50">
-                            {mcpConnectors.slice(2).map((t: any) => t.command || 'MCP').join(', ')}
+                            {mcpConnectors.slice(2).map((t: any) => t.name || t.command || 'MCP').join(', ')}
                           </span>
                         </span>
                       )}

@@ -22,6 +22,7 @@ export interface MCPToolset {
 }
 
 export interface AgentConfiguration {
+  name?: string;
   model: string;
   description: string;
   instruction: string;

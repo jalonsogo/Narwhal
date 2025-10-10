@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import { toolCategories } from '../data/toolDefinitions';
 import { ToolPreviewDialog } from './ToolPreviewDialog';
 import { Button } from './ui/button';
+import narwhalLogo from '../assets/images/logo.svg';
 
 const toolTemplates: NodeTemplate[] = Object.values(toolCategories).map(category => ({
   type: 'tool' as const,
@@ -147,7 +148,13 @@ function DraggableNode({ template, onPreview }: DraggableNodeProps) {
   );
 }
 
-export function WorkflowSidebar() {
+interface WorkflowSidebarProps {
+  isCollapsed: boolean;
+  onCollapseChange?: (isCollapsed: boolean) => void;
+  onCreateAgent?: () => void;
+}
+
+export function WorkflowSidebar({ isCollapsed, onCollapseChange, onCreateAgent }: WorkflowSidebarProps) {
   const [agentTemplates, setAgentTemplates] = useState<NodeTemplate[]>([]);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [selectedToolForPreview, setSelectedToolForPreview] = useState<string | null>(null);
@@ -156,6 +163,10 @@ export function WorkflowSidebar() {
   const [searchFilter, setSearchFilter] = useState<'all' | 'agents' | 'tools' | 'connectors'>('all');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const filterMenuRef = useRef<HTMLDivElement>(null);
+
+  const handleCollapseToggle = () => {
+    onCollapseChange?.(!isCollapsed);
+  };
 
   // Fetch agents from cagent API
   useEffect(() => {
@@ -236,13 +247,37 @@ export function WorkflowSidebar() {
   };
 
   return (
-    <div className="w-full border-r border-gray-200 bg-gray-50/50 flex flex-col h-full">
-      <div className="p-4 border-b border-gray-200 bg-white space-y-3">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-900 mb-1">Workflow Nodes</h2>
-          <p className="text-xs text-gray-500">Drag and drop to canvas</p>
+    <div className={`flex flex-col h-full transition-all ${isCollapsed ? 'w-auto' : 'w-full border-r border-gray-200 bg-gray-50/50'}`}>
+      {isCollapsed ? (
+        <div className="flex items-center gap-2 px-3 py-3">
+          <img src={narwhalLogo} alt="Narwhal" className="w-8 h-8" />
+          <span className="text-lg font-semibold mr-2">Narwhal</span>
+          <button
+            className="p-1 hover:bg-gray-100/80 rounded transition-colors bg-white/50"
+            onClick={handleCollapseToggle}
+          >
+            <LucideIcons.PanelLeftOpen className="w-4 h-4 text-gray-600" />
+          </button>
         </div>
+      ) : (
+        <>
+          {/* Narwhal Header */}
+          <div className="border-b border-gray-200 bg-white">
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2">
+                <img src={narwhalLogo} alt="Narwhal" className="w-8 h-8" />
+                <h1 className="text-lg font-semibold">Narwhal</h1>
+              </div>
+              <button
+                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                onClick={handleCollapseToggle}
+              >
+                <LucideIcons.PanelLeftClose className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+          </div>
 
+          <div className="p-4 border-b border-gray-200 bg-white">
         {/* Search Bar */}
         <div className="flex items-center gap-2">
           <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-md border border-gray-200 px-2 py-1.5">
@@ -353,6 +388,17 @@ export function WorkflowSidebar() {
 
                 {!isCollapsed && (
                   <div>
+                    {/* Add "Create Agent" button at the top of Agents section */}
+                    {category === 'Agents' && (
+                      <button
+                        onClick={() => onCreateAgent?.()}
+                        className="w-full mb-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg border border-blue-600 p-3 flex items-center justify-center gap-2 transition-colors"
+                      >
+                        <LucideIcons.Plus className="w-4 h-4" />
+                        <span className="text-sm font-medium">Create Agent</span>
+                      </button>
+                    )}
+
                     {filteredTemplates.map((template) => (
                       <DraggableNode
                         key={template.name}
@@ -367,6 +413,8 @@ export function WorkflowSidebar() {
           })}
         </div>
       </ScrollArea>
+        </>
+      )}
 
       {/* Tool Preview Dialog */}
       {selectedToolForPreview && (
