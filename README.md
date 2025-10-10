@@ -1,26 +1,91 @@
-<img width="200" height="200" alt="1CB7FBC2-D372-4B23-9EDE-0653BE3AEA0D" src="https://github.com/user-attachments/assets/0357afc9-64b0-4687-b7a9-d7531bdcffe0" />
+# Workflow Node Editor
 
-# Narwhal
-A visual flow editor for creating and orchestrating multi-agent AI workflows powered by Docker's cagent runtime.
+A visual workflow builder for creating AI-powered workflows with React Flow. This project implements a drag-and-drop interface for designing complex workflows with agents and tools.
 
-## Description
-Narwhal is a visual workflow builder that allows you to: 
-- Design complex AI agent workflows using a drag-and-drop interface
-- Orchestrate multiple specialized AI agents with specific skills and tools
-- Implement DAG-based execution with retry logic, fallback handlers, and human-in-the-loop interventions
-- Share context between agents via MCP servers
-- Visualize real-time execution status - Pause, resume, and debug workflows
-- You can run workflows in conversation mode and/or in workflow mode
-- Schedule your workflows or create hooks to trigger them.
+## Features
 
-## Contributing
+- **Visual Workflow Designer**: Drag and drop agents and tools onto a canvas
+- **Node Types**:
+  - **Agents**: AI-powered nodes (AI Assistant, Data Analyzer, Content Writer, etc.)
+  - **Tools**: Capability nodes that can be connected to agents (Web Search, HTTP Request, Database Query, etc.)
+  - **Input/Output**: Fixed nodes representing workflow entry and exit points
+- **Connection Types**:
+  - **Flow connections**: Define the execution flow between nodes
+  - **Tool connections**: Attach tools to agents to give them capabilities
+- **Configuration Panel**: Configure tool functions and agent capabilities
+- **Interactive Canvas**: Zoom, pan, and organize your workflow visually
+- **Real-time Updates**: See connections and node states update live
 
-This project is currently in early development. Contributions are welcome!
+## Tech Stack
+
+- **React** - UI framework
+- **TypeScript** - Type-safe development
+- **React DnD** - Drag and drop functionality
+- **Vite** - Build tool and dev server
+- **Tailwind CSS** - Styling
+- **Radix UI** - Accessible UI components
+- **Lucide React** - Icon library
+
+## Getting Started
+
+### Installation
+
+```bash
+npm install
+```
+
+### Development
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173) to view the application.
+
+### Build
+
+```bash
+npm run build
+```
+
+### Preview Production Build
+
+```bash
+npm run preview
+```
+
+## Project Structure
+
+```
+src/
+├── components/
+│   ├── ui/              # Reusable UI components (buttons, cards, etc.)
+│   ├── AgentDropZone.tsx
+│   ├── ConfigPanel.tsx
+│   ├── WorkflowCanvas.tsx
+│   ├── WorkflowNode.tsx
+│   └── WorkflowSidebar.tsx
+├── types/
+│   └── workflow.ts      # TypeScript type definitions
+├── styles/
+│   └── globals.css      # Global styles and Tailwind config
+├── App.tsx              # Main application component
+└── main.tsx             # Application entry point
+```
+
+## Usage
+
+1. **Add Agents**: Drag agent nodes from the sidebar to the canvas
+2. **Add Tools**: Drag tool nodes to the canvas and connect them to agents
+3. **Connect Nodes**: Click the connection points on nodes to create connections
+4. **Configure**: Click the "Configure" button on any node to set its properties
+5. **Build Workflows**: Create complex workflows by chaining agents and tools together
 
 ## License
 
-IAL
+ISC
 
 ## Acknowledgments
 
-- Built with [cagent](https://github.com/docker/cagent) by Docker Engineering
+- Design based on the Figma Workflow Node Editor UI
+- Built with modern React practices and TypeScript
