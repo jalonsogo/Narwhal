@@ -85,7 +85,7 @@ export interface WorkflowNode {
   showSteps?: boolean; // For agent nodes - whether to show/hide step nodes
   showTools?: boolean; // For agent nodes - whether to show/hide tool nodes
   showConnectors?: boolean; // For agent nodes - whether to show/hide MCP connector nodes
-  parentAgentId?: string; // For step/tool nodes - ID of the parent agent
+  parentAgentId?: string; // For step/tool/agent nodes - ID of the parent agent (for sub-agents)
   memoryEntries?: MemoryEntry[]; // For memory tool nodes - stored memories
   mcpConfig?: {
     type: 'mcp';
@@ -94,6 +94,8 @@ export interface WorkflowNode {
   }; // For MCP connector tool nodes
   toolsets?: any[]; // For agent nodes - store all toolsets from config (including MCP)
   toolsetType?: 'ref' | 'builtin' | 'mcp'; // For tool nodes created from agent toolsets
+  subAgents?: string[]; // For agent nodes - IDs of child agents (sub-agents)
+  showSubAgents?: boolean; // For agent nodes - whether to show/hide sub-agent nodes
 }
 
 export interface Connection {

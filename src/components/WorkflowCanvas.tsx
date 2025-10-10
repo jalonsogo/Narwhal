@@ -372,9 +372,39 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
       return;
     }
 
-    setNodes(prev => prev.filter(node => node.id !== id));
+    // If deleting an agent with sub-agents, also delete all its sub-agents and their tools
+    const nodeToDelete = nodes.find(n => n.id === id);
+    const nodesToDelete = [id];
+
+    if (nodeToDelete?.type === 'agent' && nodeToDelete.subAgents) {
+      // Add all sub-agents to deletion list
+      nodeToDelete.subAgents.forEach(subAgentId => {
+        nodesToDelete.push(subAgentId);
+        // Find and delete tools for each sub-agent
+        nodes.forEach(n => {
+          if (n.type === 'tool' && n.parentAgentId === subAgentId) {
+            nodesToDelete.push(n.id);
+          }
+        });
+      });
+    }
+
+    // If it's a sub-agent, remove it from parent's subAgents array
+    if (nodeToDelete?.parentAgentId && nodeToDelete?.type === 'agent') {
+      setNodes(prev => prev.map(node => {
+        if (node.id === nodeToDelete.parentAgentId) {
+          return {
+            ...node,
+            subAgents: (node.subAgents || []).filter(saId => saId !== id),
+          };
+        }
+        return node;
+      }));
+    }
+
+    setNodes(prev => prev.filter(node => !nodesToDelete.includes(node.id)));
     setConnections(prev => prev.filter(conn =>
-      conn.sourceId !== id && conn.targetId !== id
+      !nodesToDelete.includes(conn.sourceId) && !nodesToDelete.includes(conn.targetId)
     ));
   };
 
@@ -426,16 +456,182 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
     ));
   };
 
-  const handleToolDropOnAgent = (agentId: string, tool: NodeTemplate) => {
+  const handleToolDropOnAgent = async (agentId: string, item: NodeTemplate) => {
     // Find the agent node
     const agentNode = nodes.find(n => n.id === agentId);
     if (!agentNode) return;
 
-    // Count existing tools for this agent to position the new tool
+    // If it's an agent being dropped, create a sub-agent
+    if (item.type === 'agent') {
+      // Count existing sub-agents for this agent to position the new one
+      const existingSubAgents = nodes.filter(n => n.type === 'agent' && n.parentAgentId === agentId);
+      const subAgentCount = existingSubAgents.length;
+
+      // Calculate position in grid layout (2 columns) below tools
+      const columns = 2;
+      const subAgentSpacingX = 250;
+      const subAgentSpacingY = 140;
+      // Start further down to avoid overlapping with tools
+      const existingTools = getAgentTools(agentId);
+      const toolRows = Math.ceil(existingTools.length / columns);
+      const startOffsetY = 180 + (toolRows * 140); // Position below all tools
+      const row = Math.floor(subAgentCount / columns);
+      const col = subAgentCount % columns;
+
+      // Create the sub-agent node
+      const subAgentNode: WorkflowNodeType = {
+        id: `node-${Date.now()}-${Math.random()}`,
+        type: 'agent',
+        name: item.name,
+        icon: item.icon,
+        position: {
+          x: agentNode.position.x + (col * subAgentSpacingX) - 110,
+          y: agentNode.position.y + startOffsetY + (row * subAgentSpacingY),
+        },
+        parentAgentId: agentId,
+        hasKnowledgeAccess: true,
+        showSubAgents: true,
+      };
+
+      // If it's an agent from the sidebar, fetch its configuration and create tool nodes
+      if (item.name !== 'New Agent') {
+        try {
+          const response = await fetch(`http://localhost:8080/api/agents/${item.name}`);
+          if (response.ok) {
+            const agentData = await response.json();
+            const rootAgent = agentData.agents?.root || {};
+
+            // Create tool nodes for the sub-agent
+            const toolNodesToAdd: WorkflowNodeType[] = [];
+            const connectionsToAdd: Connection[] = [];
+
+            if (rootAgent.toolsets && Array.isArray(rootAgent.toolsets)) {
+              subAgentNode.toolsets = rootAgent.toolsets;
+              subAgentNode.showTools = true;
+              subAgentNode.showConnectors = true;
+
+              const getToolDisplayName = (tool: any): string => {
+                if (tool.ref) return tool.ref;
+                const builtInToolNames: Record<string, string> = {
+                  'think': 'Think',
+                  'todo': 'Todo List',
+                  'memory': 'Memory',
+                  'code': 'Code Execution',
+                  'browser': 'Browser',
+                  'filesystem': 'File System',
+                };
+                return builtInToolNames[tool.type] || tool.type || 'Tool';
+              };
+
+              const getToolIcon = (toolset: any): string => {
+                if (toolset.type === 'mcp') return 'Cloud';
+                if (toolset.ref) return 'Wrench';
+                const builtInIcons: Record<string, string> = {
+                  'think': 'Lightbulb',
+                  'todo': 'CheckSquare',
+                  'memory': 'Brain',
+                  'code': 'Code',
+                  'browser': 'Globe',
+                  'filesystem': 'FolderOpen',
+                };
+                return builtInIcons[toolset.type] || 'Wrench';
+              };
+
+              const toolColumns = 2;
+              const toolSpacingX = 250;
+              const toolSpacingY = 140;
+              const toolStartOffsetY = 180;
+
+              rootAgent.toolsets.forEach((toolset: any, index: number) => {
+                const toolRow = Math.floor(index / toolColumns);
+                const toolCol = index % toolColumns;
+
+                const toolsetType: 'ref' | 'builtin' | 'mcp' =
+                  toolset.type === 'mcp' ? 'mcp' :
+                  toolset.ref ? 'ref' : 'builtin';
+
+                const displayName = toolset.type === 'mcp'
+                  ? (toolset.command || 'MCP Connector')
+                  : getToolDisplayName(toolset);
+
+                const toolFunctions = getToolFunctions(displayName);
+
+                const toolNode: WorkflowNodeType = {
+                  id: `node-${Date.now()}-${Math.random()}-${index}`,
+                  type: 'tool',
+                  name: displayName,
+                  icon: getToolIcon(toolset),
+                  position: {
+                    x: subAgentNode.position.x + (toolCol * toolSpacingX) - 110,
+                    y: subAgentNode.position.y + toolStartOffsetY + (toolRow * toolSpacingY),
+                  },
+                  parentAgentId: subAgentNode.id,
+                  toolsetType: toolsetType,
+                  mcpConfig: toolset.type === 'mcp' ? {
+                    type: 'mcp',
+                    command: toolset.command,
+                    args: toolset.args || [],
+                  } : undefined,
+                  data: toolFunctions.length > 0 ? {
+                    functions: toolFunctions.map(f => f.name),
+                  } : undefined,
+                };
+
+                toolNodesToAdd.push(toolNode);
+
+                const connection: Connection = {
+                  id: `conn-${Date.now()}-${index}`,
+                  sourceId: toolNode.id,
+                  targetId: subAgentNode.id,
+                  connectionType: 'tool',
+                };
+
+                connectionsToAdd.push(connection);
+              });
+            }
+
+            // Add sub-agent and all its tool nodes
+            setNodes(prev => [...prev, subAgentNode, ...toolNodesToAdd]);
+            if (connectionsToAdd.length > 0) {
+              setConnections(prev => [...prev, ...connectionsToAdd]);
+            }
+          } else {
+            setNodes(prev => [...prev, subAgentNode]);
+          }
+        } catch (error) {
+          console.error('Failed to fetch agent config for sub-agent:', error);
+          setNodes(prev => [...prev, subAgentNode]);
+        }
+      } else {
+        setNodes(prev => [...prev, subAgentNode]);
+      }
+
+      // Update the parent agent to track this sub-agent
+      setNodes(prev => prev.map(node => {
+        if (node.id === agentId) {
+          const updatedSubAgents = [...(node.subAgents || []), subAgentNode.id];
+          return { ...node, subAgents: updatedSubAgents, showSubAgents: true };
+        }
+        return node;
+      }));
+
+      // Create a connection from sub-agent to parent agent
+      const subAgentConnection: Connection = {
+        id: `conn-${Date.now()}-subagent`,
+        sourceId: subAgentNode.id,
+        targetId: agentId,
+        connectionType: 'tool', // Use 'tool' type for sub-agents to get the dashed line
+      };
+
+      setConnections(prev => [...prev, subAgentConnection]);
+
+      return;
+    }
+
+    // Original tool drop logic
     const existingTools = getAgentTools(agentId);
     const toolCount = existingTools.length;
 
-    // Calculate position in grid layout (2 columns)
     const columns = 2;
     const toolSpacingX = 250;
     const toolSpacingY = 140;
@@ -443,38 +639,34 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
     const row = Math.floor(toolCount / columns);
     const col = toolCount % columns;
 
-    // Get functions for this tool from toolDefinitions
-    const toolFunctions = getToolFunctions(tool.name);
+    const toolFunctions = getToolFunctions(item.name);
 
-    // Create the tool node below the agent in grid layout
     const toolNode: WorkflowNodeType = {
       id: `node-${Date.now()}-${Math.random()}`,
       type: 'tool',
-      name: tool.name,
-      icon: tool.icon,
+      name: item.name,
+      icon: item.icon,
       position: {
         x: agentNode.position.x + (col * toolSpacingX) - 110,
         y: agentNode.position.y + startOffsetY + (row * toolSpacingY),
       },
       parentAgentId: agentId,
-      toolsetType: tool.mcpConfig ? 'mcp' : 'builtin',
-      mcpConfig: tool.mcpConfig, // Store MCP config if present
+      toolsetType: item.mcpConfig ? 'mcp' : 'builtin',
+      mcpConfig: item.mcpConfig,
       data: toolFunctions.length > 0 ? {
         functions: toolFunctions.map(f => f.name),
       } : undefined,
     };
 
-    // Create toolset entry for the agent's toolsets array
-    const toolsetEntry: any = tool.mcpConfig ? {
+    const toolsetEntry: any = item.mcpConfig ? {
       type: 'mcp',
-      name: tool.name, // Store the friendly name (e.g., "Salesforce MCP", "GitHub MCP")
-      command: tool.mcpConfig.command,
-      args: tool.mcpConfig.args,
+      name: item.name,
+      command: item.mcpConfig.command,
+      args: item.mcpConfig.args,
     } : {
-      type: tool.name.toLowerCase().replace(/\s+/g, '_'),
+      type: item.name.toLowerCase().replace(/\s+/g, '_'),
     };
 
-    // Update the agent node to add this tool to its toolsets
     setNodes(prev => prev.map(node => {
       if (node.id === agentId) {
         const updatedToolsets = [...(node.toolsets || []), toolsetEntry];
@@ -483,10 +675,8 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
       return node;
     }));
 
-    // Add the tool node
     setNodes(prev => [...prev, toolNode]);
 
-    // Create a connection from tool to agent
     const connection: Connection = {
       id: `conn-${Date.now()}`,
       sourceId: toolNode.id,
@@ -1005,47 +1195,92 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
     let startX = 0;
     let startY = 0;
 
-    // Determine start position based on source node type
-    if (sourceNode.type === 'input' || sourceNode.type === 'agent' || sourceNode.type === 'step') {
-      // Output from bottom for agent/step vertical flow
-      if (sourceNode.type === 'agent' || sourceNode.type === 'step') {
-        startX = sourceNode.position.x + (nodeWidth / 2);
-        startY = sourceNode.position.y + nodeHeight + 8;
-      } else {
-        // Input outputs from right side
+    // Check if this connection is from a parent agent's section to a child node
+    const targetNode = targetId ? nodes.find(n => n.id === targetId) : null;
+    const isToolConnection = sourceNode.type === 'tool' && targetNode?.type === 'agent';
+    const isSubAgentConnection = sourceNode.type === 'agent' && sourceNode.parentAgentId === targetId;
+
+    // For connections from parent agent sections, find the section circle position
+    if (targetNode && (isToolConnection || isSubAgentConnection)) {
+      // Start from parent's section circle on the left
+      let sectionOffsetY = 0;
+
+      if (isSubAgentConnection) {
+        // Sub-agents section (first section)
+        sectionOffsetY = 20;
+      } else if (isToolConnection) {
+        // Calculate section offset based on tool type
+        const isMcpTool = sourceNode.toolsetType === 'mcp' || sourceNode.mcpConfig;
+
+        if (isMcpTool) {
+          // MCP Connectors section
+          const hasSubAgents = targetNode.subAgents && targetNode.subAgents.length > 0;
+          const agentTools = nodes.filter(n =>
+            n.type === 'tool' &&
+            n.parentAgentId === targetId &&
+            !(n.toolsetType === 'mcp' || n.mcpConfig)
+          );
+          const hasRegularTools = agentTools.length > 0;
+
+          if (hasSubAgents && hasRegularTools) {
+            sectionOffsetY = 180; // Below sub-agents and tools sections
+          } else if (hasSubAgents || hasRegularTools) {
+            sectionOffsetY = 100; // Below one section
+          } else {
+            sectionOffsetY = 20; // First section
+          }
+        } else {
+          // Regular tools section
+          const hasSubAgents = targetNode.subAgents && targetNode.subAgents.length > 0;
+
+          if (hasSubAgents) {
+            sectionOffsetY = 100; // Below sub-agents section
+          } else {
+            sectionOffsetY = 20; // First section
+          }
+        }
+      }
+
+      startX = targetNode.position.x - 24; // Section circle on left
+      startY = targetNode.position.y + sectionOffsetY;
+    } else {
+      // Regular connection start points
+      // Determine start position based on source node type
+      if (sourceNode.type === 'input' || sourceNode.type === 'agent' || sourceNode.type === 'step') {
+        // Output from bottom for agent/step vertical flow
+        if (sourceNode.type === 'agent' || sourceNode.type === 'step') {
+          startX = sourceNode.position.x + (nodeWidth / 2);
+          startY = sourceNode.position.y + nodeHeight + 8;
+        } else {
+          // Input outputs from right side
+          startX = sourceNode.position.x + nodeWidth + 8;
+          startY = sourceNode.position.y + (nodeHeight / 2);
+        }
+      } else if (sourceNode.type === 'tool') {
+        // Tool outputs from right side
         startX = sourceNode.position.x + nodeWidth + 8;
         startY = sourceNode.position.y + (nodeHeight / 2);
       }
-    } else if (sourceNode.type === 'tool') {
-      // Tool outputs from right side
-      startX = sourceNode.position.x + nodeWidth + 8;
-      startY = sourceNode.position.y + (nodeHeight / 2);
     }
 
     let finalEndX = endX || 0;
     let finalEndY = endY || 0;
 
     if (targetId) {
-      const targetNode = nodes.find(n => n.id === targetId);
       if (!targetNode) return '';
 
       const sourceIsToolToAgent = sourceNode.type === 'tool' && targetNode.type === 'agent';
+      const sourceIsSubAgentToAgent = sourceNode.type === 'agent' && sourceNode.parentAgentId === targetId;
       const sourceIsAgentOrStepToStep = (sourceNode.type === 'agent' || sourceNode.type === 'step') && targetNode.type === 'step';
 
       if (sourceIsToolToAgent) {
-        // For tool to agent connections, connect to top or bottom
-        const distanceToTop = Math.abs(startY - targetNode.position.y);
-        const distanceToBottom = Math.abs(startY - (targetNode.position.y + nodeHeight));
-
-        if (distanceToTop < distanceToBottom) {
-          // Connect to top: node.y - 8px (the -top-2 offset)
-          finalEndX = targetNode.position.x + (nodeWidth / 2);
-          finalEndY = targetNode.position.y - 8;
-        } else {
-          // Connect to bottom: node.y + height + 8px (the -bottom-2 offset)
-          finalEndX = targetNode.position.x + (nodeWidth / 2);
-          finalEndY = targetNode.position.y + nodeHeight + 8;
-        }
+        // For tool to agent connections, end at tool's left circle
+        finalEndX = sourceNode.position.x - 8; // Left side circle
+        finalEndY = sourceNode.position.y + (nodeHeight / 2);
+      } else if (sourceIsSubAgentToAgent) {
+        // For sub-agent to parent agent connections, end at sub-agent's left circle
+        finalEndX = sourceNode.position.x - 8; // Left side circle
+        finalEndY = sourceNode.position.y + (nodeHeight / 2);
       } else if (sourceIsAgentOrStepToStep) {
         // For agent/step to step connections (vertical flow), connect bottom to top
         finalEndX = targetNode.position.x + (nodeWidth / 2);
@@ -1062,14 +1297,11 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
     const midY = (startY + finalEndY) / 2;
 
     // Use different curve for tool connections (vertical approach)
-    const sourceNode2 = nodes.find(n => n.id === sourceId);
-    const targetNode2 = targetId ? nodes.find(n => n.id === targetId) : null;
-    const isToolConnection = sourceNode2?.type === 'tool' && targetNode2?.type === 'agent';
-    const isVerticalStepFlow = (sourceNode2?.type === 'agent' || sourceNode2?.type === 'step') && targetNode2?.type === 'step';
+    const isVerticalStepFlow = (sourceNode.type === 'agent' || sourceNode.type === 'step') && targetNode?.type === 'step';
 
-    if (isToolConnection) {
-      // Smooth curve for tool connections
-      return `M ${startX} ${startY} C ${startX + 50} ${startY}, ${finalEndX} ${finalEndY - 50}, ${finalEndX} ${finalEndY}`;
+    if (isToolConnection || isSubAgentConnection) {
+      // Smooth curve for tool and sub-agent connections
+      return `M ${startX} ${startY} C ${startX + 50} ${startY}, ${finalEndX - 50} ${finalEndY}, ${finalEndX} ${finalEndY}`;
     }
 
     if (isVerticalStepFlow) {
@@ -1635,10 +1867,27 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
               }
             }
 
+            // Filter out sub-agent nodes if their parent agent has showSubAgents = false
+            if (node.type === 'agent' && node.parentAgentId) {
+              const parentAgent = nodes.find(n => n.id === node.parentAgentId);
+              if (parentAgent) {
+                return parentAgent.showSubAgents !== false;
+              }
+            }
+
             // Filter out tool nodes based on their toolsetType and parent agent visibility settings
             if (node.type === 'tool' && node.parentAgentId) {
               const parentAgent = nodes.find(n => n.id === node.parentAgentId);
               if (parentAgent) {
+                // For tools belonging to sub-agents, check if the sub-agent is visible first
+                const agentNode = nodes.find(n => n.id === node.parentAgentId);
+                if (agentNode?.type === 'agent' && agentNode.parentAgentId) {
+                  const grandParentAgent = nodes.find(n => n.id === agentNode.parentAgentId);
+                  if (grandParentAgent?.showSubAgents === false) {
+                    return false;
+                  }
+                }
+
                 // MCP connector nodes - check showConnectors
                 if (node.toolsetType === 'mcp') {
                   return parentAgent.showConnectors !== false;

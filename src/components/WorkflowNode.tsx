@@ -50,12 +50,12 @@ export function WorkflowNode({
   const dragStartPos = useRef({ x: 0, y: 0, nodeX: 0, nodeY: 0 });
   const hasDragged = useRef(false);
 
-  // Drop zone for tools on agent nodes
+  // Drop zone for tools and agents on agent nodes
   const [{ isOver: isToolOver, draggedItem }, dropRef] = useDrop(() => ({
     accept: 'node',
     canDrop: (item: NodeTemplate) => {
-      // Only allow dropping tools on agent nodes
-      return node.type === 'agent' && item.type === 'tool';
+      // Allow dropping tools or agents on agent nodes
+      return node.type === 'agent' && (item.type === 'tool' || item.type === 'agent');
     },
     drop: (item: NodeTemplate) => {
       if (onToolDrop && node.type === 'agent') {
@@ -68,8 +68,9 @@ export function WorkflowNode({
     }),
   }), [node.type, node.id, onToolDrop]);
 
-  // Check if the dragged item is an MCP connector
+  // Check if the dragged item is an MCP connector or agent
   const isDraggingConnector = isToolOver && draggedItem?.mcpConfig;
+  const isDraggingAgent = isToolOver && draggedItem?.type === 'agent';
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -178,6 +179,7 @@ export function WorkflowNode({
       onMouseDown={handleMouseDown}
     >
       <div className={`w-[230px] bg-white rounded-lg shadow-md border ${
+        isDraggingAgent ? 'border-blue-500 border-2 shadow-blue-200' :
         isDraggingConnector ? 'border-purple-500 border-2 shadow-purple-200' :
         isToolOver ? 'border-green-500 border-2 shadow-green-200' : 'border-gray-200'
       } ${isDraggingNode ? 'shadow-xl' : ''} transition-all`}>
@@ -186,6 +188,11 @@ export function WorkflowNode({
           <div className="flex items-center gap-2">
             {Icon && <Icon className="w-4 h-4 text-white" />}
             <span className="text-sm font-medium text-white">{node.name}</span>
+            {node.type === 'agent' && node.parentAgentId && (
+              <span className="text-[10px] bg-white/20 text-white px-1.5 py-0.5 rounded" title="Sub-agent">
+                <LucideIcons.UserCog className="w-3 h-3" />
+              </span>
+            )}
           </div>
           {!isDefaultNode && (
             <button
@@ -302,6 +309,43 @@ export function WorkflowNode({
             </div>
           )}
 
+          {/* Sub-Agents for Agents */}
+          {node.type === 'agent' && node.subAgents && node.subAgents.length > 0 && (
+            <div className="relative">
+              {/* Connection point on the left */}
+              <div
+                className="absolute -left-[24px] top-3 w-3.5 h-3.5 bg-white border-2 border-blue-500 rounded-full cursor-pointer z-10 transition-all hover:scale-110"
+                onMouseDown={handleOutputMouseDown}
+                title="Connect sub-agents"
+              />
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-[10px] text-gray-500 uppercase tracking-wide">
+                  Sub-Agents ({node.subAgents.length})
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNodeUpdate?.(node.id, { showSubAgents: !node.showSubAgents });
+                  }}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  title={node.showSubAgents !== false ? 'Hide sub-agent nodes' : 'Show sub-agent nodes'}
+                >
+                  {node.showSubAgents !== false ? (
+                    <LucideIcons.EyeOff className="w-3 h-3" />
+                  ) : (
+                    <LucideIcons.Eye className="w-3 h-3" />
+                  )}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded flex items-center gap-1">
+                  <LucideIcons.Users className="w-3 h-3" />
+                  {node.subAgents.length} agent{node.subAgents.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Connected Tools for Agents */}
           {node.type === 'agent' && node.toolsets && node.toolsets.length > 0 && (() => {
             // Separate into three categories:
@@ -334,7 +378,13 @@ export function WorkflowNode({
             return (
               <div className="space-y-2">
                 {regularTools.length > 0 && (
-                  <div>
+                  <div className="relative">
+                    {/* Connection point on the left */}
+                    <div
+                      className="absolute -left-[24px] top-3 w-3.5 h-3.5 bg-white border-2 border-green-500 rounded-full cursor-pointer z-10 transition-all hover:scale-110"
+                      onMouseDown={handleOutputMouseDown}
+                      title="Connect tools"
+                    />
                     <div className="flex items-center justify-between mb-1">
                       <div className="text-[10px] text-gray-500 uppercase tracking-wide">
                         Tools ({regularTools.length})
@@ -376,7 +426,13 @@ export function WorkflowNode({
                 )}
 
                 {mcpConnectors.length > 0 && (
-                  <div>
+                  <div className="relative">
+                    {/* Connection point on the left */}
+                    <div
+                      className="absolute -left-[24px] top-3 w-3.5 h-3.5 bg-white border-2 border-purple-500 rounded-full cursor-pointer z-10 transition-all hover:scale-110"
+                      onMouseDown={handleOutputMouseDown}
+                      title="Connect MCP connectors"
+                    />
                     <div className="flex items-center justify-between mb-1">
                       <div className="text-[10px] text-gray-500 uppercase tracking-wide">
                         MCP Connectors ({mcpConnectors.length})
@@ -488,8 +544,32 @@ export function WorkflowNode({
         </div>
 
         {/* Connection points */}
-        {/* Left Input - hide for Input and Tool nodes */}
-        {node.type !== 'input' && node.type !== 'tool' && (
+        {/* Left Input Circle - For sub-agents to receive connections from parent */}
+        {node.type === 'agent' && node.parentAgentId && (
+          <div
+            className={`absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white border-2 rounded-full cursor-pointer z-10 ${
+              isDraggingConnection ? 'border-blue-500 scale-110' : 'border-blue-500'
+            } transition-all hover:scale-110`}
+            onMouseUp={handleInputMouseUp}
+            title="Sub-agent connection point"
+          />
+        )}
+
+        {/* Left Input Circle - For tools to receive connections from parent agent */}
+        {node.type === 'tool' && node.parentAgentId && (
+          <div
+            className={`absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white border-2 rounded-full cursor-pointer z-10 ${
+              isDraggingConnection ? 'scale-110' : ''
+            } ${
+              node.toolsetType === 'mcp' || node.mcpConfig ? 'border-purple-500' : 'border-green-500'
+            } transition-all hover:scale-110`}
+            onMouseUp={handleInputMouseUp}
+            title={node.toolsetType === 'mcp' ? 'MCP connector connection point' : 'Tool connection point'}
+          />
+        )}
+
+        {/* Left Input - hide for Input and Tool nodes, and for sub-agents (they use blue circle above) */}
+        {node.type !== 'input' && node.type !== 'tool' && !(node.type === 'agent' && node.parentAgentId) && (
           <div
             className={`absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white border-2 rounded-full cursor-pointer z-10 ${
               isDraggingConnection ? 'border-blue-500 scale-110' : 'border-gray-400'
