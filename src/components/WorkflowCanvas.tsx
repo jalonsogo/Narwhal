@@ -1195,53 +1195,32 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
     let startX = 0;
     let startY = 0;
 
-    // Determine start position based on source node type
-    if (sourceNode.type === 'input' || sourceNode.type === 'agent' || sourceNode.type === 'step') {
-      // Output from bottom for agent/step vertical flow
-      if (sourceNode.type === 'agent' || sourceNode.type === 'step') {
-        startX = sourceNode.position.x + (nodeWidth / 2);
-        startY = sourceNode.position.y + nodeHeight + 8;
-      } else {
-        // Input outputs from right side
-        startX = sourceNode.position.x + nodeWidth + 8;
-        startY = sourceNode.position.y + (nodeHeight / 2);
-      }
-    } else if (sourceNode.type === 'tool') {
-      // Tool outputs from right side
-      startX = sourceNode.position.x + nodeWidth + 8;
-      startY = sourceNode.position.y + (nodeHeight / 2);
-    }
+    // Check if this connection is from a parent agent's section to a child node
+    const targetNode = targetId ? nodes.find(n => n.id === targetId) : null;
+    const isToolConnection = sourceNode.type === 'tool' && targetNode?.type === 'agent';
+    const isSubAgentConnection = sourceNode.type === 'agent' && sourceNode.parentAgentId === targetId;
 
-    let finalEndX = endX || 0;
-    let finalEndY = endY || 0;
+    // For connections from parent agent sections, find the section circle position
+    if (targetNode && (isToolConnection || isSubAgentConnection)) {
+      // Start from parent's section circle on the left
+      let sectionOffsetY = 0;
 
-    if (targetId) {
-      const targetNode = nodes.find(n => n.id === targetId);
-      if (!targetNode) return '';
-
-      const sourceIsToolToAgent = sourceNode.type === 'tool' && targetNode.type === 'agent';
-      const sourceIsSubAgentToAgent = sourceNode.type === 'agent' && sourceNode.parentAgentId === targetId;
-      const sourceIsAgentOrStepToStep = (sourceNode.type === 'agent' || sourceNode.type === 'step') && targetNode.type === 'step';
-
-      if (sourceIsToolToAgent) {
-        // For tool to agent connections, connect to section connection point on left side
+      if (isSubAgentConnection) {
+        // Sub-agents section (first section)
+        sectionOffsetY = 20;
+      } else if (isToolConnection) {
         // Calculate section offset based on tool type
-        let sectionOffsetY = 0;
-
-        // Get all tools for this agent to calculate position
-        const agentTools = nodes.filter(n =>
-          n.type === 'tool' &&
-          connections.some(c => c.sourceId === n.id && c.targetId === targetId && c.connectionType === 'tool')
-        );
-
-        // Check if this is an MCP connector or regular tool
         const isMcpTool = sourceNode.toolsetType === 'mcp' || sourceNode.mcpConfig;
 
         if (isMcpTool) {
-          // MCP Connectors section - calculate offset based on presence of sub-agents and tools
+          // MCP Connectors section
           const hasSubAgents = targetNode.subAgents && targetNode.subAgents.length > 0;
-          const regularTools = agentTools.filter(t => t.toolsetType !== 'mcp');
-          const hasRegularTools = regularTools.length > 0;
+          const agentTools = nodes.filter(n =>
+            n.type === 'tool' &&
+            n.parentAgentId === targetId &&
+            !(n.toolsetType === 'mcp' || n.mcpConfig)
+          );
+          const hasRegularTools = agentTools.length > 0;
 
           if (hasSubAgents && hasRegularTools) {
             sectionOffsetY = 180; // Below sub-agents and tools sections
@@ -1251,7 +1230,7 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
             sectionOffsetY = 20; // First section
           }
         } else {
-          // Regular tools section - calculate offset based on presence of sub-agents
+          // Regular tools section
           const hasSubAgents = targetNode.subAgents && targetNode.subAgents.length > 0;
 
           if (hasSubAgents) {
@@ -1260,14 +1239,48 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
             sectionOffsetY = 20; // First section
           }
         }
+      }
 
-        // Connect to section connection point on left side of agent card
-        finalEndX = targetNode.position.x - 24; // Left side, where section connectors are
-        finalEndY = targetNode.position.y + sectionOffsetY;
+      startX = targetNode.position.x - 24; // Section circle on left
+      startY = targetNode.position.y + sectionOffsetY;
+    } else {
+      // Regular connection start points
+      // Determine start position based on source node type
+      if (sourceNode.type === 'input' || sourceNode.type === 'agent' || sourceNode.type === 'step') {
+        // Output from bottom for agent/step vertical flow
+        if (sourceNode.type === 'agent' || sourceNode.type === 'step') {
+          startX = sourceNode.position.x + (nodeWidth / 2);
+          startY = sourceNode.position.y + nodeHeight + 8;
+        } else {
+          // Input outputs from right side
+          startX = sourceNode.position.x + nodeWidth + 8;
+          startY = sourceNode.position.y + (nodeHeight / 2);
+        }
+      } else if (sourceNode.type === 'tool') {
+        // Tool outputs from right side
+        startX = sourceNode.position.x + nodeWidth + 8;
+        startY = sourceNode.position.y + (nodeHeight / 2);
+      }
+    }
+
+    let finalEndX = endX || 0;
+    let finalEndY = endY || 0;
+
+    if (targetId) {
+      if (!targetNode) return '';
+
+      const sourceIsToolToAgent = sourceNode.type === 'tool' && targetNode.type === 'agent';
+      const sourceIsSubAgentToAgent = sourceNode.type === 'agent' && sourceNode.parentAgentId === targetId;
+      const sourceIsAgentOrStepToStep = (sourceNode.type === 'agent' || sourceNode.type === 'step') && targetNode.type === 'step';
+
+      if (sourceIsToolToAgent) {
+        // For tool to agent connections, end at tool's left circle
+        finalEndX = sourceNode.position.x - 8; // Left side circle
+        finalEndY = sourceNode.position.y + (nodeHeight / 2);
       } else if (sourceIsSubAgentToAgent) {
-        // For sub-agent to parent agent connections, connect to sub-agents section point
-        finalEndX = targetNode.position.x - 24; // Left side, where section connectors are
-        finalEndY = targetNode.position.y + 20; // Sub-agents section (first section)
+        // For sub-agent to parent agent connections, end at sub-agent's left circle
+        finalEndX = sourceNode.position.x - 8; // Left side circle
+        finalEndY = sourceNode.position.y + (nodeHeight / 2);
       } else if (sourceIsAgentOrStepToStep) {
         // For agent/step to step connections (vertical flow), connect bottom to top
         finalEndX = targetNode.position.x + (nodeWidth / 2);

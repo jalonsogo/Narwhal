@@ -544,8 +544,32 @@ export function WorkflowNode({
         </div>
 
         {/* Connection points */}
-        {/* Left Input - hide for Input and Tool nodes */}
-        {node.type !== 'input' && node.type !== 'tool' && (
+        {/* Left Input Circle - For sub-agents to receive connections from parent */}
+        {node.type === 'agent' && node.parentAgentId && (
+          <div
+            className={`absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white border-2 rounded-full cursor-pointer z-10 ${
+              isDraggingConnection ? 'border-blue-500 scale-110' : 'border-blue-500'
+            } transition-all hover:scale-110`}
+            onMouseUp={handleInputMouseUp}
+            title="Sub-agent connection point"
+          />
+        )}
+
+        {/* Left Input Circle - For tools to receive connections from parent agent */}
+        {node.type === 'tool' && node.parentAgentId && (
+          <div
+            className={`absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white border-2 rounded-full cursor-pointer z-10 ${
+              isDraggingConnection ? 'scale-110' : ''
+            } ${
+              node.toolsetType === 'mcp' || node.mcpConfig ? 'border-purple-500' : 'border-green-500'
+            } transition-all hover:scale-110`}
+            onMouseUp={handleInputMouseUp}
+            title={node.toolsetType === 'mcp' ? 'MCP connector connection point' : 'Tool connection point'}
+          />
+        )}
+
+        {/* Left Input - hide for Input and Tool nodes, and for sub-agents (they use blue circle above) */}
+        {node.type !== 'input' && node.type !== 'tool' && !(node.type === 'agent' && node.parentAgentId) && (
           <div
             className={`absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white border-2 rounded-full cursor-pointer z-10 ${
               isDraggingConnection ? 'border-blue-500 scale-110' : 'border-gray-400'
