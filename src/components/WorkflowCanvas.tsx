@@ -372,9 +372,39 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
       return;
     }
 
-    setNodes(prev => prev.filter(node => node.id !== id));
+    // If deleting an agent with sub-agents, also delete all its sub-agents and their tools
+    const nodeToDelete = nodes.find(n => n.id === id);
+    const nodesToDelete = [id];
+
+    if (nodeToDelete?.type === 'agent' && nodeToDelete.subAgents) {
+      // Add all sub-agents to deletion list
+      nodeToDelete.subAgents.forEach(subAgentId => {
+        nodesToDelete.push(subAgentId);
+        // Find and delete tools for each sub-agent
+        nodes.forEach(n => {
+          if (n.type === 'tool' && n.parentAgentId === subAgentId) {
+            nodesToDelete.push(n.id);
+          }
+        });
+      });
+    }
+
+    // If it's a sub-agent, remove it from parent's subAgents array
+    if (nodeToDelete?.parentAgentId && nodeToDelete?.type === 'agent') {
+      setNodes(prev => prev.map(node => {
+        if (node.id === nodeToDelete.parentAgentId) {
+          return {
+            ...node,
+            subAgents: (node.subAgents || []).filter(saId => saId !== id),
+          };
+        }
+        return node;
+      }));
+    }
+
+    setNodes(prev => prev.filter(node => !nodesToDelete.includes(node.id)));
     setConnections(prev => prev.filter(conn =>
-      conn.sourceId !== id && conn.targetId !== id
+      !nodesToDelete.includes(conn.sourceId) && !nodesToDelete.includes(conn.targetId)
     ));
   };
 
@@ -426,16 +456,172 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
     ));
   };
 
-  const handleToolDropOnAgent = (agentId: string, tool: NodeTemplate) => {
+  const handleToolDropOnAgent = async (agentId: string, item: NodeTemplate) => {
     // Find the agent node
     const agentNode = nodes.find(n => n.id === agentId);
     if (!agentNode) return;
 
-    // Count existing tools for this agent to position the new tool
+    // If it's an agent being dropped, create a sub-agent
+    if (item.type === 'agent') {
+      // Count existing sub-agents for this agent to position the new one
+      const existingSubAgents = nodes.filter(n => n.type === 'agent' && n.parentAgentId === agentId);
+      const subAgentCount = existingSubAgents.length;
+
+      // Calculate position in grid layout (2 columns) below tools
+      const columns = 2;
+      const subAgentSpacingX = 250;
+      const subAgentSpacingY = 140;
+      // Start further down to avoid overlapping with tools
+      const existingTools = getAgentTools(agentId);
+      const toolRows = Math.ceil(existingTools.length / columns);
+      const startOffsetY = 180 + (toolRows * 140); // Position below all tools
+      const row = Math.floor(subAgentCount / columns);
+      const col = subAgentCount % columns;
+
+      // Create the sub-agent node
+      const subAgentNode: WorkflowNodeType = {
+        id: `node-${Date.now()}-${Math.random()}`,
+        type: 'agent',
+        name: item.name,
+        icon: item.icon,
+        position: {
+          x: agentNode.position.x + (col * subAgentSpacingX) - 110,
+          y: agentNode.position.y + startOffsetY + (row * subAgentSpacingY),
+        },
+        parentAgentId: agentId,
+        hasKnowledgeAccess: true,
+        showSubAgents: true,
+      };
+
+      // If it's an agent from the sidebar, fetch its configuration and create tool nodes
+      if (item.name !== 'New Agent') {
+        try {
+          const response = await fetch(`http://localhost:8080/api/agents/${item.name}`);
+          if (response.ok) {
+            const agentData = await response.json();
+            const rootAgent = agentData.agents?.root || {};
+
+            // Create tool nodes for the sub-agent
+            const toolNodesToAdd: WorkflowNodeType[] = [];
+            const connectionsToAdd: Connection[] = [];
+
+            if (rootAgent.toolsets && Array.isArray(rootAgent.toolsets)) {
+              subAgentNode.toolsets = rootAgent.toolsets;
+              subAgentNode.showTools = true;
+              subAgentNode.showConnectors = true;
+
+              const getToolDisplayName = (tool: any): string => {
+                if (tool.ref) return tool.ref;
+                const builtInToolNames: Record<string, string> = {
+                  'think': 'Think',
+                  'todo': 'Todo List',
+                  'memory': 'Memory',
+                  'code': 'Code Execution',
+                  'browser': 'Browser',
+                  'filesystem': 'File System',
+                };
+                return builtInToolNames[tool.type] || tool.type || 'Tool';
+              };
+
+              const getToolIcon = (toolset: any): string => {
+                if (toolset.type === 'mcp') return 'Cloud';
+                if (toolset.ref) return 'Wrench';
+                const builtInIcons: Record<string, string> = {
+                  'think': 'Lightbulb',
+                  'todo': 'CheckSquare',
+                  'memory': 'Brain',
+                  'code': 'Code',
+                  'browser': 'Globe',
+                  'filesystem': 'FolderOpen',
+                };
+                return builtInIcons[toolset.type] || 'Wrench';
+              };
+
+              const toolColumns = 2;
+              const toolSpacingX = 250;
+              const toolSpacingY = 140;
+              const toolStartOffsetY = 180;
+
+              rootAgent.toolsets.forEach((toolset: any, index: number) => {
+                const toolRow = Math.floor(index / toolColumns);
+                const toolCol = index % toolColumns;
+
+                const toolsetType: 'ref' | 'builtin' | 'mcp' =
+                  toolset.type === 'mcp' ? 'mcp' :
+                  toolset.ref ? 'ref' : 'builtin';
+
+                const displayName = toolset.type === 'mcp'
+                  ? (toolset.command || 'MCP Connector')
+                  : getToolDisplayName(toolset);
+
+                const toolFunctions = getToolFunctions(displayName);
+
+                const toolNode: WorkflowNodeType = {
+                  id: `node-${Date.now()}-${Math.random()}-${index}`,
+                  type: 'tool',
+                  name: displayName,
+                  icon: getToolIcon(toolset),
+                  position: {
+                    x: subAgentNode.position.x + (toolCol * toolSpacingX) - 110,
+                    y: subAgentNode.position.y + toolStartOffsetY + (toolRow * toolSpacingY),
+                  },
+                  parentAgentId: subAgentNode.id,
+                  toolsetType: toolsetType,
+                  mcpConfig: toolset.type === 'mcp' ? {
+                    type: 'mcp',
+                    command: toolset.command,
+                    args: toolset.args || [],
+                  } : undefined,
+                  data: toolFunctions.length > 0 ? {
+                    functions: toolFunctions.map(f => f.name),
+                  } : undefined,
+                };
+
+                toolNodesToAdd.push(toolNode);
+
+                const connection: Connection = {
+                  id: `conn-${Date.now()}-${index}`,
+                  sourceId: toolNode.id,
+                  targetId: subAgentNode.id,
+                  connectionType: 'tool',
+                };
+
+                connectionsToAdd.push(connection);
+              });
+            }
+
+            // Add sub-agent and all its tool nodes
+            setNodes(prev => [...prev, subAgentNode, ...toolNodesToAdd]);
+            if (connectionsToAdd.length > 0) {
+              setConnections(prev => [...prev, ...connectionsToAdd]);
+            }
+          } else {
+            setNodes(prev => [...prev, subAgentNode]);
+          }
+        } catch (error) {
+          console.error('Failed to fetch agent config for sub-agent:', error);
+          setNodes(prev => [...prev, subAgentNode]);
+        }
+      } else {
+        setNodes(prev => [...prev, subAgentNode]);
+      }
+
+      // Update the parent agent to track this sub-agent
+      setNodes(prev => prev.map(node => {
+        if (node.id === agentId) {
+          const updatedSubAgents = [...(node.subAgents || []), subAgentNode.id];
+          return { ...node, subAgents: updatedSubAgents, showSubAgents: true };
+        }
+        return node;
+      }));
+
+      return;
+    }
+
+    // Original tool drop logic
     const existingTools = getAgentTools(agentId);
     const toolCount = existingTools.length;
 
-    // Calculate position in grid layout (2 columns)
     const columns = 2;
     const toolSpacingX = 250;
     const toolSpacingY = 140;
@@ -443,38 +629,34 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
     const row = Math.floor(toolCount / columns);
     const col = toolCount % columns;
 
-    // Get functions for this tool from toolDefinitions
-    const toolFunctions = getToolFunctions(tool.name);
+    const toolFunctions = getToolFunctions(item.name);
 
-    // Create the tool node below the agent in grid layout
     const toolNode: WorkflowNodeType = {
       id: `node-${Date.now()}-${Math.random()}`,
       type: 'tool',
-      name: tool.name,
-      icon: tool.icon,
+      name: item.name,
+      icon: item.icon,
       position: {
         x: agentNode.position.x + (col * toolSpacingX) - 110,
         y: agentNode.position.y + startOffsetY + (row * toolSpacingY),
       },
       parentAgentId: agentId,
-      toolsetType: tool.mcpConfig ? 'mcp' : 'builtin',
-      mcpConfig: tool.mcpConfig, // Store MCP config if present
+      toolsetType: item.mcpConfig ? 'mcp' : 'builtin',
+      mcpConfig: item.mcpConfig,
       data: toolFunctions.length > 0 ? {
         functions: toolFunctions.map(f => f.name),
       } : undefined,
     };
 
-    // Create toolset entry for the agent's toolsets array
-    const toolsetEntry: any = tool.mcpConfig ? {
+    const toolsetEntry: any = item.mcpConfig ? {
       type: 'mcp',
-      name: tool.name, // Store the friendly name (e.g., "Salesforce MCP", "GitHub MCP")
-      command: tool.mcpConfig.command,
-      args: tool.mcpConfig.args,
+      name: item.name,
+      command: item.mcpConfig.command,
+      args: item.mcpConfig.args,
     } : {
-      type: tool.name.toLowerCase().replace(/\s+/g, '_'),
+      type: item.name.toLowerCase().replace(/\s+/g, '_'),
     };
 
-    // Update the agent node to add this tool to its toolsets
     setNodes(prev => prev.map(node => {
       if (node.id === agentId) {
         const updatedToolsets = [...(node.toolsets || []), toolsetEntry];
@@ -483,10 +665,8 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
       return node;
     }));
 
-    // Add the tool node
     setNodes(prev => [...prev, toolNode]);
 
-    // Create a connection from tool to agent
     const connection: Connection = {
       id: `conn-${Date.now()}`,
       sourceId: toolNode.id,
@@ -1635,10 +1815,27 @@ export const WorkflowCanvas = forwardRef((props, ref) => {
               }
             }
 
+            // Filter out sub-agent nodes if their parent agent has showSubAgents = false
+            if (node.type === 'agent' && node.parentAgentId) {
+              const parentAgent = nodes.find(n => n.id === node.parentAgentId);
+              if (parentAgent) {
+                return parentAgent.showSubAgents !== false;
+              }
+            }
+
             // Filter out tool nodes based on their toolsetType and parent agent visibility settings
             if (node.type === 'tool' && node.parentAgentId) {
               const parentAgent = nodes.find(n => n.id === node.parentAgentId);
               if (parentAgent) {
+                // For tools belonging to sub-agents, check if the sub-agent is visible first
+                const agentNode = nodes.find(n => n.id === node.parentAgentId);
+                if (agentNode?.type === 'agent' && agentNode.parentAgentId) {
+                  const grandParentAgent = nodes.find(n => n.id === agentNode.parentAgentId);
+                  if (grandParentAgent?.showSubAgents === false) {
+                    return false;
+                  }
+                }
+
                 // MCP connector nodes - check showConnectors
                 if (node.toolsetType === 'mcp') {
                   return parentAgent.showConnectors !== false;
