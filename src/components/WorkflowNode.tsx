@@ -311,7 +311,13 @@ export function WorkflowNode({
 
           {/* Sub-Agents for Agents */}
           {node.type === 'agent' && node.subAgents && node.subAgents.length > 0 && (
-            <div>
+            <div className="relative">
+              {/* Connection point on the left */}
+              <div
+                className="absolute -left-[24px] top-3 w-3.5 h-3.5 bg-white border-2 border-blue-500 rounded-full cursor-pointer z-10 transition-all hover:scale-110"
+                onMouseDown={handleOutputMouseDown}
+                title="Connect sub-agents"
+              />
               <div className="flex items-center justify-between mb-1">
                 <div className="text-[10px] text-gray-500 uppercase tracking-wide">
                   Sub-Agents ({node.subAgents.length})
@@ -372,7 +378,13 @@ export function WorkflowNode({
             return (
               <div className="space-y-2">
                 {regularTools.length > 0 && (
-                  <div>
+                  <div className="relative">
+                    {/* Connection point on the left */}
+                    <div
+                      className="absolute -left-[24px] top-3 w-3.5 h-3.5 bg-white border-2 border-green-500 rounded-full cursor-pointer z-10 transition-all hover:scale-110"
+                      onMouseDown={handleOutputMouseDown}
+                      title="Connect tools"
+                    />
                     <div className="flex items-center justify-between mb-1">
                       <div className="text-[10px] text-gray-500 uppercase tracking-wide">
                         Tools ({regularTools.length})
@@ -414,7 +426,13 @@ export function WorkflowNode({
                 )}
 
                 {mcpConnectors.length > 0 && (
-                  <div>
+                  <div className="relative">
+                    {/* Connection point on the left */}
+                    <div
+                      className="absolute -left-[24px] top-3 w-3.5 h-3.5 bg-white border-2 border-purple-500 rounded-full cursor-pointer z-10 transition-all hover:scale-110"
+                      onMouseDown={handleOutputMouseDown}
+                      title="Connect MCP connectors"
+                    />
                     <div className="flex items-center justify-between mb-1">
                       <div className="text-[10px] text-gray-500 uppercase tracking-wide">
                         MCP Connectors ({mcpConnectors.length})
