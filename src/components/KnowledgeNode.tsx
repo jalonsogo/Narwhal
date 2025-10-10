@@ -187,7 +187,7 @@ export function KnowledgeNode({ node, onItemAdd, onItemRemove, onPositionChange 
       onMouseDown={handleMouseDown}
     >
       {/* Header */}
-      <div className="knowledge-header bg-purple-500 px-4 py-2 rounded-t-lg flex items-center gap-2 cursor-grab active:cursor-grabbing">
+      <div className="knowledge-header bg-black px-4 py-2 rounded-t-lg flex items-center gap-2 cursor-grab active:cursor-grabbing">
         <LucideIcons.Database className="w-5 h-5 text-white" />
         <span className="text-white font-medium text-sm">Knowledge Base</span>
       </div>

@@ -180,6 +180,16 @@ export const toolCategories = {
       },
     ] as ToolFunction[],
   },
+  code: {
+    name: 'Code Execution',
+    description: 'Execute code in various programming languages',
+    functions: [] as ToolFunction[],
+  },
+  browser: {
+    name: 'Browser',
+    description: 'Web browser automation and interaction',
+    functions: [] as ToolFunction[],
+  },
 };
 
 // Helper function to get all functions for a tool category

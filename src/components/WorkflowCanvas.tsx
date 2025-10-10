@@ -124,6 +124,8 @@ export function WorkflowCanvas() {
           icon: item.icon,
           position: { x, y },
           hasKnowledgeAccess: item.type === 'agent' ? true : undefined,
+          mcpConfig: item.mcpConfig,
+          toolsetType: item.mcpConfig ? 'mcp' : undefined,
         };
 
         // If it's an agent, fetch its configuration and create tool nodes

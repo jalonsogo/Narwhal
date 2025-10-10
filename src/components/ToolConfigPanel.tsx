@@ -16,9 +16,19 @@ interface ToolConfigPanelProps {
 
 export function ToolConfigPanel({ isOpen, onClose, node, onSave }: ToolConfigPanelProps) {
   // Find the category that matches the tool name
-  const category = Object.values(toolCategories).find(
+  let category = Object.values(toolCategories).find(
     cat => cat.name.toLowerCase() === node.name.toLowerCase()
   );
+
+  // If this is an MCP connector, create a dynamic category
+  const isMCPConnector = node.mcpConfig || node.toolsetType === 'mcp';
+  if (!category && isMCPConnector) {
+    category = {
+      name: node.name,
+      description: `MCP Connector: ${node.mcpConfig?.command || node.name}`,
+      functions: [],
+    };
+  }
 
   // Initialize enabled functions and their configurations
   const [enabledFunctions, setEnabledFunctions] = useState<Record<string, boolean>>(
@@ -105,15 +115,41 @@ export function ToolConfigPanel({ isOpen, onClose, node, onSave }: ToolConfigPan
           <div className="p-6 overflow-y-auto max-h-[calc(85vh-180px)]">
             <div className="mb-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-1">
-                Enable/Disable Functions
+                {category.functions.length > 0 ? 'Enable/Disable Functions' : 'Tool Information'}
               </h3>
               <p className="text-xs text-gray-500">
-                Toggle functions and configure their parameters
+                {category.functions.length > 0
+                  ? 'Toggle functions and configure their parameters'
+                  : 'This tool is automatically managed by the agent'}
               </p>
             </div>
 
-            <div className="space-y-4">
-              {category.functions.map((func: ToolFunction, index: number) => {
+            {category.functions.length === 0 ? (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center">
+                <div className="mx-auto w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center mb-3">
+                  <Wrench className="w-6 h-6 text-gray-400" />
+                </div>
+                <p className="text-sm text-gray-600 mb-1 font-medium">No Configurable Functions</p>
+                <p className="text-xs text-gray-500">
+                  {isMCPConnector
+                    ? 'This MCP connector is configured through the agent settings.'
+                    : 'This built-in tool is ready to use without additional configuration.'}
+                </p>
+                {node.mcpConfig && (
+                  <div className="mt-4 text-left bg-white rounded border border-gray-200 p-3">
+                    <div className="text-xs font-semibold text-gray-700 mb-2">MCP Configuration</div>
+                    <div className="space-y-1 text-xs text-gray-600">
+                      <div><span className="font-medium">Command:</span> {node.mcpConfig.command}</div>
+                      {node.mcpConfig.args && node.mcpConfig.args.length > 0 && (
+                        <div><span className="font-medium">Args:</span> {node.mcpConfig.args.join(', ')}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {category.functions.map((func: ToolFunction, index: number) => {
                 const isEnabled = enabledFunctions[func.name] || false;
                 const hasArgs = Object.keys(func.arguments).length > 0;
 
@@ -195,7 +231,8 @@ export function ToolConfigPanel({ isOpen, onClose, node, onSave }: ToolConfigPan
                   </div>
                 );
               })}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Footer with Actions */}

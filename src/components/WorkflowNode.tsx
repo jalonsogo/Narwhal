@@ -119,7 +119,13 @@ export function WorkflowNode({
       case 'input': return 'bg-emerald-500';
       case 'output': return 'bg-pink-500';
       case 'agent': return 'bg-blue-500';
-      case 'tool': return 'bg-green-500';
+      case 'tool':
+        // MCP connectors get purple header
+        if (node.toolsetType === 'mcp' || node.mcpConfig) {
+          return 'bg-purple-500';
+        }
+        return 'bg-green-500';
+      case 'knowledge': return 'bg-black';
       case 'step': return 'bg-purple-500';
       case 'condition': return 'bg-amber-500';
       default: return 'bg-gray-500';
@@ -226,13 +232,6 @@ export function WorkflowNode({
               <div className="text-xs text-amber-700 leading-relaxed font-medium">
                 {node.conditionDescription}
               </div>
-            </div>
-          )}
-
-          {node.type !== 'input' && node.type !== 'step' && node.type !== 'condition' && (
-            <div>
-              <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Type</div>
-              <div className="text-xs text-gray-700 capitalize">{node.type}</div>
             </div>
           )}
 
