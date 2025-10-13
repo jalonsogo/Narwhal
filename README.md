@@ -17,6 +17,7 @@ A visual workflow builder for creating AI-powered workflows with React Flow. Thi
 - **Configuration Panel**: Configure tool functions and agent capabilities
 - **Interactive Canvas**: Zoom, pan, and organize your workflow visually
 - **Real-time Updates**: See connections and node states update live
+<img width="1436" height="904" alt="MAIN" src="https://github.com/user-attachments/assets/2aca11a1-e1d1-4d68-804b-5f664288f9fe" />
 
 ## Tech Stack
 
