@@ -1,6 +1,8 @@
-# Workflow Node Editor
-
+# Narwhal Agent Builder 
 A visual workflow builder for creating AI-powered workflows with React Flow. This project implements a drag-and-drop interface for designing complex workflows with agents and tools.
+
+<img width="300" height="830" alt="BD37DF9B-7188-4886-A305-F6AD39051B9D" src="https://github.com/user-attachments/assets/cadfbda1-b12a-49af-9d4e-fc8c32053340" />
+
 
 ## Features
 
@@ -34,46 +36,13 @@ A visual workflow builder for creating AI-powered workflows with React Flow. Thi
 npm install
 ```
 
-### Development
-
 ```bash
 npm run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173) to view the application.
 
-### Build
-
-```bash
-npm run build
-```
-
-### Preview Production Build
-
-```bash
-npm run preview
-```
-
-## Project Structure
-
-```
-src/
-├── components/
-│   ├── ui/              # Reusable UI components (buttons, cards, etc.)
-│   ├── AgentDropZone.tsx
-│   ├── ConfigPanel.tsx
-│   ├── WorkflowCanvas.tsx
-│   ├── WorkflowNode.tsx
-│   └── WorkflowSidebar.tsx
-├── types/
-│   └── workflow.ts      # TypeScript type definitions
-├── styles/
-│   └── globals.css      # Global styles and Tailwind config
-├── App.tsx              # Main application component
-└── main.tsx             # Application entry point
-```
-
-## Usage
+## 🔘 Usage
 
 1. **Add Agents**: Drag agent nodes from the sidebar to the canvas
 2. **Add Tools**: Drag tool nodes to the canvas and connect them to agents
@@ -81,9 +50,8 @@ src/
 4. **Configure**: Click the "Configure" button on any node to set its properties
 5. **Build Workflows**: Create complex workflows by chaining agents and tools together
 
-## License
-
-ISC
+## 📜 LOLcense
+For {root} sake I'm a designer. Mostly all the code has been writen by chatGPT and ad latere.
 
 ## Acknowledgments
 
