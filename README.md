@@ -58,3 +58,7 @@ For {root} sake I'm a designer. Mostly all the code has been writen by chatGPT a
 
 - Design based on the Figma Workflow Node Editor UI
 - Built with modern React practices and TypeScript
+
+## LOLcense
+
+For {root} sake I'm a designer. Mostly all the code has been written by Claude and ad latere.
